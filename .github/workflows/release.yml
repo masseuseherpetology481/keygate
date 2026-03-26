@@ -6,7 +6,7 @@ on:
       - "v*"
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 env:
@@ -14,7 +14,19 @@ env:
   IMAGE_NAME: tabloy/keygate
 
 jobs:
+  release:
+    name: GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+
   docker:
+    name: Docker Image
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
