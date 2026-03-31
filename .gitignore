@@ -38,7 +38,6 @@ Thumbs.db
 web/node_modules/
 web/dist/
 web/.vite/
-web/bun.lock
 
 # Test artifacts
 tests/
