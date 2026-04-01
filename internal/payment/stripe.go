@@ -15,6 +15,7 @@ import (
 	"github.com/stripe/stripe-go/v82"
 	portalsession "github.com/stripe/stripe-go/v82/billingportal/session"
 	"github.com/stripe/stripe-go/v82/checkout/session"
+	stripecustomer "github.com/stripe/stripe-go/v82/customer"
 	stripeinvoice "github.com/stripe/stripe-go/v82/invoice"
 	stripeprice "github.com/stripe/stripe-go/v82/price"
 	"github.com/stripe/stripe-go/v82/subscription"
@@ -168,6 +169,8 @@ func (h *StripeHandler) CheckoutByPlan(c *gin.Context) {
 		SuccessURL:          stripe.String(h.BaseURL + "/checkout/success?session_id={CHECKOUT_SESSION_ID}"),
 		CancelURL:           stripe.String(h.BaseURL + "/pricing"),
 		AllowPromotionCodes: stripe.Bool(true),
+		CustomerEmail:       nil, // let Stripe collect it
+		CustomerCreation:    stripe.String("always"),
 	}
 	params.Metadata = map[string]string{
 		"plan_id":    plan.ID,
@@ -291,8 +294,20 @@ func (h *StripeHandler) fulfillCheckout(ctx context.Context, email, customerID, 
 		return
 	}
 
+	// Resolve email from Stripe Customer (authoritative source)
+	if customerID != "" {
+		if cust, err := stripecustomer.Get(customerID, nil); err == nil && cust.Email != "" {
+			email = cust.Email
+		}
+	}
+
+	if email == "" {
+		slog.Warn("stripe checkout: no customer email, skipping", "customer_id", customerID, "source", source)
+		return
+	}
+
 	// Prevent duplicate
-	if email != "" {
+	{
 		if existing := h.Store.FindActiveLicenseByEmailAndProduct(ctx, email, plan.ProductID); existing != nil {
 			slog.Info("stripe checkout: license already exists",
 				"email", email, "product_id", plan.ProductID, "existing_license", existing.ID, "source", source)
@@ -324,9 +339,18 @@ func (h *StripeHandler) fulfillCheckout(ctx context.Context, email, customerID, 
 		lic.StripeSubscriptionID = subscriptionID
 	}
 
+	// Ensure user record exists so they appear in Customers
+	_ = h.Store.UpsertUser(ctx, &model.User{Email: email})
+
 	if err := h.Store.CreateLicenseWithSubscription(ctx, lic, plan); err != nil {
 		slog.Error("stripe checkout: failed to create license", "email", email, "error", err)
 		return
+	}
+
+	// Link license to user
+	if u, err := h.Store.FindUserByEmail(ctx, email); err == nil {
+		lic.UserID = u.ID
+		_ = h.Store.UpdateLicenseUser(ctx, lic.ID, u.ID)
 	}
 
 	productName := h.productName(ctx, plan.ProductID)

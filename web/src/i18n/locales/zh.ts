@@ -336,6 +336,7 @@ const zh = {
   "checkout.licenseSentTo": "许可证密钥已发送至 {email}",
   "checkout.licenseCreated": "许可证密钥已创建",
   "checkout.error": "无法验证付款。您的许可证将稍后通过邮件发送。",
+  "checkout.viewLicense": "查看我的许可证",
 
   // Portal
   "portal.myLicenses": "我的许可证",

@@ -1,5 +1,6 @@
 import { CheckCircle, Loader2 } from "lucide-react"
 import { useEffect, useState } from "react"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useSiteConfig } from "@/hooks/use-site-config"
 import { useI18n } from "@/i18n"
@@ -51,6 +52,9 @@ export default function CheckoutSuccessPage() {
               <p className="text-muted-foreground">
                 {email ? t("checkout.licenseSentTo", { email }) : t("checkout.licenseCreated")}
               </p>
+              <Button className="mt-4" asChild>
+                <a href="/login">{t("checkout.viewLicense")}</a>
+              </Button>
             </div>
           )}
           {status === "error" && (

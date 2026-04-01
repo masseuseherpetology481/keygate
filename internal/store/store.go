@@ -471,6 +471,14 @@ func (s *Store) ListLicensesByEmail(ctx context.Context, email string) ([]*model
 
 // FindActiveLicenseByEmailAndProduct returns an active or trialing license
 // for the given email and product, or nil if none exists.
+func (s *Store) UpdateLicenseUser(ctx context.Context, licenseID, userID string) error {
+	_, err := s.DB.NewUpdate().Model((*model.License)(nil)).
+		Set("user_id = ?", userID).
+		Where("id = ?", licenseID).
+		Exec(ctx)
+	return err
+}
+
 func (s *Store) FindActiveLicenseByEmailAndProduct(ctx context.Context, email, productID string) *model.License {
 	var lic model.License
 	err := s.DB.NewSelect().Model(&lic).
