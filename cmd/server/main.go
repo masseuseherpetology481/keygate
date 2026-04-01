@@ -308,7 +308,7 @@ func main() {
 	v1.GET("/checkout/verify", middleware.RateLimitByIP(10, time.Minute), stripeH.VerifyCheckoutSession)
 
 	// Unified checkout: GET /pay/:checkout_id → Stripe
-	r.GET("/pay/:checkout_id", middleware.RateLimitByIP(10, time.Minute), stripeH.CheckoutByPlan)
+	r.GET("/pay/:checkout_id", stripeH.CheckoutByPlan)
 	v1.POST("/subscription/change-plan", middleware.SessionAuth(cfg.JWTSecret, db.FindUserIsAdmin), stripeH.ChangePlan)
 	v1.POST("/subscription/cancel", middleware.SessionAuth(cfg.JWTSecret, db.FindUserIsAdmin), stripeH.CancelSubscription)
 	v1.POST("/subscription/billing-portal", middleware.SessionAuth(cfg.JWTSecret, db.FindUserIsAdmin), stripeH.CreatePortalSession)
