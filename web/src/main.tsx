@@ -19,6 +19,7 @@ import PlansPage from "@/pages/admin/plans"
 import ProductsPage from "@/pages/admin/products"
 import SettingsPage from "@/pages/admin/settings"
 import WebhooksPage from "@/pages/admin/webhooks"
+import CheckoutSuccessPage from "@/pages/checkout-success"
 import LoginPage from "@/pages/login"
 import PortalAccountPage from "@/pages/portal/account"
 import PortalLicensesPage from "@/pages/portal/licenses"
@@ -47,6 +48,7 @@ createRoot(document.getElementById("root")!).render(
                 <ErrorBoundary>
                   <Routes>
                     <Route path="/login" element={<LoginPage />} />
+                    <Route path="/checkout/success" element={<CheckoutSuccessPage />} />
 
                     {/* Admin */}
                     <Route path="/admin" element={<AdminLayout />}>

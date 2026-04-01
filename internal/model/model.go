@@ -6,7 +6,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// ─── User (OAuth only) ───
+// ─── User ───
 
 type User struct {
 	bun.BaseModel `bun:"table:users"`
@@ -40,6 +40,18 @@ type OAuthAccount struct {
 	ProviderID string    `bun:",notnull" json:"provider_id"`
 	Email      string    `json:"email,omitempty"`
 	CreatedAt  time.Time `bun:",nullzero,default:now()" json:"created_at"`
+}
+
+type OTPCode struct {
+	bun.BaseModel `bun:"table:otp_codes"`
+
+	ID        string    `bun:",pk" json:"id"`
+	Email     string    `bun:",notnull" json:"email"`
+	CodeHash  string    `bun:",notnull" json:"-"`
+	Attempts  int       `bun:",notnull,default:0" json:"attempts"`
+	ExpiresAt time.Time `bun:",notnull" json:"expires_at"`
+	Used      bool      `bun:",notnull,default:false" json:"used"`
+	CreatedAt time.Time `bun:",nullzero,default:now()" json:"created_at"`
 }
 
 // ─── Product ───
@@ -83,13 +95,13 @@ type Plan struct {
 	ProductID       string    `bun:",notnull" json:"product_id"`
 	Name            string    `bun:",notnull" json:"name"`
 	Slug            string    `bun:",notnull" json:"slug"`
+	CheckoutID      string    `bun:",unique,notnull" json:"checkout_id"`
 	LicenseType     string    `bun:",notnull" json:"license_type"`
 	BillingInterval string    `json:"billing_interval,omitempty"`
 	MaxActivations  int       `bun:",notnull,default:3" json:"max_activations"`
 	TrialDays       int       `bun:",default:0" json:"trial_days"`
 	GraceDays       int       `bun:",default:7" json:"grace_days"`
 	StripePriceID   string    `json:"stripe_price_id,omitempty"`
-	PayPalPlanID    string    `bun:"paypal_plan_id" json:"paypal_plan_id,omitempty"`
 	LicenseModel    string    `bun:",notnull,default:'standard'" json:"license_model"` // standard | floating
 	FloatingTimeout int       `bun:",notnull,default:30" json:"floating_timeout"`      // minutes
 	MaxSeats        int       `bun:",notnull,default:0" json:"max_seats"`
@@ -131,7 +143,6 @@ type License struct {
 	PaymentProvider      string `json:"payment_provider,omitempty"`
 	StripeCustomerID     string `json:"stripe_customer_id,omitempty"`
 	StripeSubscriptionID string `bun:",unique,nullzero" json:"stripe_subscription_id,omitempty"`
-	PayPalSubscriptionID string `bun:"paypal_subscription_id,unique,nullzero" json:"paypal_subscription_id,omitempty"`
 
 	Status      string     `bun:",notnull,default:'active'" json:"status"`
 	ValidFrom   time.Time  `bun:",notnull,default:now()" json:"valid_from"`

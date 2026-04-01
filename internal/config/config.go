@@ -19,18 +19,8 @@ type Config struct {
 	JWTSecret         string
 	LicenseSigningKey string
 
-	GitHubClientID     string
-	GitHubClientSecret string
-	GoogleClientID     string
-	GoogleClientSecret string
-
 	StripeSecretKey     string
 	StripeWebhookSecret string
-
-	PayPalClientID     string
-	PayPalClientSecret string
-	PayPalWebhookID    string
-	PayPalSandbox      bool
 
 	WebhookMaxAttempts    int
 	WebhookRetryInterval  string
@@ -64,18 +54,8 @@ func Load() (*Config, error) {
 		JWTSecret:         os.Getenv("JWT_SECRET"),
 		LicenseSigningKey: os.Getenv("LICENSE_SIGNING_KEY"),
 
-		GitHubClientID:     os.Getenv("GITHUB_CLIENT_ID"),
-		GitHubClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
-		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
-		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-
 		StripeSecretKey:     os.Getenv("STRIPE_SECRET_KEY"),
 		StripeWebhookSecret: os.Getenv("STRIPE_WEBHOOK_SECRET"),
-
-		PayPalClientID:     os.Getenv("PAYPAL_CLIENT_ID"),
-		PayPalClientSecret: os.Getenv("PAYPAL_CLIENT_SECRET"),
-		PayPalWebhookID:    os.Getenv("PAYPAL_WEBHOOK_ID"),
-		PayPalSandbox:      os.Getenv("PAYPAL_SANDBOX") == "true",
 	}
 
 	cfg.RedisURL = os.Getenv("REDIS_URL")
@@ -155,10 +135,6 @@ func (c *Config) ValidateSecurityDefaults() (warnings []string, fatal []string) 
 	}
 
 	if c.IsProduction() {
-		// In production, OAuth must be configured
-		if c.GitHubClientID == "" && c.GoogleClientID == "" {
-			warnings = append(warnings, "SECURITY: no OAuth provider configured — users cannot log in")
-		}
 		// Must have at least one admin
 		if len(c.AdminEmails) == 0 {
 			warnings = append(warnings, "SECURITY: ADMIN_EMAILS is empty — no one can access the admin panel")

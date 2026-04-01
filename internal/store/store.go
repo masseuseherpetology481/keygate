@@ -292,7 +292,7 @@ func (s *Store) SetUserRole(ctx context.Context, userID, role string) error {
 }
 
 // CreatePlaceholderUser creates a user with minimal info for team invites.
-// The user will get proper name/avatar when they first log in via OAuth.
+// The user will get proper name when they first log in.
 func (s *Store) CreatePlaceholderUser(ctx context.Context, email, role string) error {
 	u := &model.User{
 		ID:    newID(),
@@ -422,11 +422,6 @@ func (s *Store) FindLicenseByStripeCustomer(ctx context.Context, customerID stri
 		Scan(ctx)
 }
 
-func (s *Store) FindLicenseByPayPalSubscription(ctx context.Context, subID string) (*model.License, error) {
-	l := new(model.License)
-	return l, s.DB.NewSelect().Model(l).Relation("Plan").Where("license.paypal_subscription_id = ?", subID).Scan(ctx)
-}
-
 func (s *Store) UpdateLicense(ctx context.Context, l *model.License, cols ...string) error {
 	l.UpdatedAt = time.Now()
 	cols = append(cols, "updated_at")
@@ -474,6 +469,19 @@ func (s *Store) ListLicensesByEmail(ctx context.Context, email string) ([]*model
 	return out, err
 }
 
+// FindActiveLicenseByEmailAndProduct returns an active or trialing license
+// for the given email and product, or nil if none exists.
+func (s *Store) FindActiveLicenseByEmailAndProduct(ctx context.Context, email, productID string) *model.License {
+	var lic model.License
+	err := s.DB.NewSelect().Model(&lic).
+		Where("email = ? AND product_id = ? AND status IN (?, ?)", email, productID, "active", "trialing").
+		Limit(1).Scan(ctx)
+	if err != nil {
+		return nil
+	}
+	return &lic
+}
+
 func (s *Store) ListLicenses(ctx context.Context, productID, status, search string, offset, limit int) ([]*model.License, int, error) {
 	q := s.DB.NewSelect().Model((*model.License)(nil)).
 		Relation("Plan").Relation("Product").
@@ -504,9 +512,9 @@ func (s *Store) FindPlanByStripePrice(ctx context.Context, priceID string) (*mod
 	return p, s.DB.NewSelect().Model(p).Relation("Entitlements").Where("stripe_price_id = ?", priceID).Scan(ctx)
 }
 
-func (s *Store) FindPlanByPayPalPlanID(ctx context.Context, planID string) (*model.Plan, error) {
+func (s *Store) FindPlanByCheckoutID(ctx context.Context, checkoutID string) (*model.Plan, error) {
 	p := new(model.Plan)
-	return p, s.DB.NewSelect().Model(p).Relation("Entitlements").Where("paypal_plan_id = ?", planID).Scan(ctx)
+	return p, s.DB.NewSelect().Model(p).Relation("Entitlements").Where("checkout_id = ?", checkoutID).Scan(ctx)
 }
 
 func (s *Store) FindPlanByID(ctx context.Context, id string) (*model.Plan, error) {
@@ -689,6 +697,58 @@ func (s *Store) DeleteUserRefreshTokens(ctx context.Context, userID string) {
 
 func (s *Store) CleanExpiredRefreshTokens(ctx context.Context) {
 	_, _ = s.DB.NewRaw("DELETE FROM refresh_tokens WHERE expires_at < now()").Exec(ctx)
+}
+
+// ─── OTP Codes ───
+
+func (s *Store) CreateOTPCode(ctx context.Context, otp *model.OTPCode) error {
+	if otp.ID == "" {
+		otp.ID = newID()
+	}
+	_, err := s.DB.NewInsert().Model(otp).Exec(ctx)
+	return err
+}
+
+func (s *Store) CountRecentOTPCodes(ctx context.Context, email string) (int, error) {
+	count, err := s.DB.NewSelect().Model((*model.OTPCode)(nil)).
+		Where("email = ? AND created_at > now() - interval '10 minutes'", email).
+		Count(ctx)
+	return count, err
+}
+
+func (s *Store) FindLatestValidOTPCode(ctx context.Context, email string) (*model.OTPCode, error) {
+	otp := new(model.OTPCode)
+	err := s.DB.NewSelect().Model(otp).
+		Where("email = ?", email).
+		Where("used = false").
+		Where("expires_at > now()").
+		Where("attempts < 5").
+		OrderExpr("created_at DESC").
+		Limit(1).
+		Scan(ctx)
+	return otp, err
+}
+
+func (s *Store) IncrementOTPAttempts(ctx context.Context, id string) error {
+	_, err := s.DB.NewUpdate().Model((*model.OTPCode)(nil)).
+		Set("attempts = attempts + 1").
+		Where("id = ?", id).
+		Exec(ctx)
+	return err
+}
+
+func (s *Store) MarkOTPUsed(ctx context.Context, id string) error {
+	_, err := s.DB.NewUpdate().Model((*model.OTPCode)(nil)).
+		Set("used = true").
+		Where("id = ?", id).
+		Exec(ctx)
+	return err
+}
+
+func (s *Store) CleanExpiredOTPs(ctx context.Context) {
+	_, _ = s.DB.NewDelete().Model((*model.OTPCode)(nil)).
+		Where("expires_at < now()").
+		Exec(ctx)
 }
 
 // ─── Processed Events (webhook idempotency) ───

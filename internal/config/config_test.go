@@ -110,7 +110,7 @@ func TestValidateSecurityDefaults(t *testing.T) {
 		}
 	})
 
-	t.Run("production without OAuth", func(t *testing.T) {
+	t.Run("production without admin emails", func(t *testing.T) {
 		c := &Config{
 			Environment:       "production",
 			JWTSecret:         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -119,12 +119,12 @@ func TestValidateSecurityDefaults(t *testing.T) {
 		warnings, _ := c.ValidateSecurityDefaults()
 		found := false
 		for _, w := range warnings {
-			if w == "SECURITY: no OAuth provider configured — users cannot log in" {
+			if w == "SECURITY: ADMIN_EMAILS is empty — no one can access the admin panel" {
 				found = true
 			}
 		}
 		if !found {
-			t.Error("expected OAuth warning in production")
+			t.Error("expected admin emails warning in production")
 		}
 	})
 }

@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -21,15 +20,9 @@ import (
 	"github.com/tabloy/keygate/pkg/response"
 )
 
-// PayPalCanceler can cancel PayPal subscriptions (implemented by PayPalHandler).
-type PayPalCanceler interface {
-	CancelSubscriptionByID(ctx context.Context, subscriptionID, reason string) error
-}
-
 type AdminHandler struct {
-	Store        *store.Store
-	Webhook      *service.WebhookService
-	PayPalCancel PayPalCanceler // optional: set if PayPal is configured
+	Store   *store.Store
+	Webhook *service.WebhookService
 }
 
 func NewAdminHandler(s *store.Store, wh *service.WebhookService) *AdminHandler {
@@ -200,7 +193,6 @@ func (h *AdminHandler) CreatePlan(c *gin.Context) {
 		TrialDays       int    `json:"trial_days"`
 		GraceDays       int    `json:"grace_days"`
 		StripePriceID   string `json:"stripe_price_id"`
-		PayPalPlanID    string `json:"paypal_plan_id"`
 		LicenseModel    string `json:"license_model"`
 		FloatingTimeout int    `json:"floating_timeout"`
 		SortOrder       int    `json:"sort_order"`
@@ -266,7 +258,6 @@ func (h *AdminHandler) CreatePlan(c *gin.Context) {
 		TrialDays:       req.TrialDays,
 		GraceDays:       req.GraceDays,
 		StripePriceID:   req.StripePriceID,
-		PayPalPlanID:    req.PayPalPlanID,
 		LicenseModel:    licenseModel,
 		FloatingTimeout: floatingTimeout,
 		Active:          true,
@@ -302,7 +293,6 @@ func (h *AdminHandler) UpdatePlan(c *gin.Context) {
 		TrialDays       *int    `json:"trial_days"`
 		GraceDays       *int    `json:"grace_days"`
 		StripePriceID   *string `json:"stripe_price_id"`
-		PayPalPlanID    *string `json:"paypal_plan_id"`
 		Active          *bool   `json:"active"`
 		SortOrder       *int    `json:"sort_order"`
 	}
@@ -334,9 +324,6 @@ func (h *AdminHandler) UpdatePlan(c *gin.Context) {
 	}
 	if req.StripePriceID != nil {
 		p.StripePriceID = *req.StripePriceID
-	}
-	if req.PayPalPlanID != nil {
-		p.PayPalPlanID = *req.PayPalPlanID
 	}
 	if req.Active != nil {
 		p.Active = *req.Active
@@ -637,27 +624,18 @@ func (h *AdminHandler) RefundLicense(c *gin.Context) {
 		return
 	}
 
-	if lic.StripeSubscriptionID == "" && lic.PayPalSubscriptionID == "" {
+	if lic.StripeSubscriptionID == "" {
 		response.BadRequest(c, "license has no payment subscription to refund")
 		return
 	}
 
-	// Cancel subscription at payment provider
+	// Cancel subscription at Stripe
 	providerResult := "no_active_subscription"
-	if lic.StripeSubscriptionID != "" {
-		if _, cancelErr := subscription.Cancel(lic.StripeSubscriptionID, nil); cancelErr != nil {
-			providerResult = "stripe_cancel_failed"
-			slog.Error("stripe subscription cancel failed", "subscription_id", lic.StripeSubscriptionID, "error", cancelErr)
-		} else {
-			providerResult = "stripe_subscription_canceled"
-		}
-	} else if lic.PayPalSubscriptionID != "" && h.PayPalCancel != nil {
-		if cancelErr := h.PayPalCancel.CancelSubscriptionByID(c.Request.Context(), lic.PayPalSubscriptionID, "Admin refund"); cancelErr != nil {
-			providerResult = "paypal_cancel_failed"
-			slog.Error("paypal subscription cancel failed", "subscription_id", lic.PayPalSubscriptionID, "error", cancelErr)
-		} else {
-			providerResult = "paypal_subscription_canceled"
-		}
+	if _, cancelErr := subscription.Cancel(lic.StripeSubscriptionID, nil); cancelErr != nil {
+		providerResult = "stripe_cancel_failed"
+		slog.Error("stripe subscription cancel failed", "subscription_id", lic.StripeSubscriptionID, "error", cancelErr)
+	} else {
+		providerResult = "stripe_subscription_canceled"
 	}
 
 	// Mark the license as revoked
@@ -1338,7 +1316,7 @@ func (h *AdminHandler) InviteTeamMember(c *gin.Context) {
 	// Find or create user
 	user, err := h.Store.FindUserByEmail(c, req.Email)
 	if err != nil {
-		// User doesn't exist yet — create placeholder (will get proper name on first OAuth login)
+		// User doesn't exist yet — create placeholder (will get proper name on first login)
 		if err := h.Store.CreatePlaceholderUser(c, req.Email, role); err != nil {
 			response.Internal(c)
 			return

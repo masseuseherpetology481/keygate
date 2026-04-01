@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -15,6 +16,7 @@ import (
 	portalsession "github.com/stripe/stripe-go/v82/billingportal/session"
 	"github.com/stripe/stripe-go/v82/checkout/session"
 	stripeinvoice "github.com/stripe/stripe-go/v82/invoice"
+	stripeprice "github.com/stripe/stripe-go/v82/price"
 	"github.com/stripe/stripe-go/v82/subscription"
 	"github.com/stripe/stripe-go/v82/webhook"
 
@@ -27,10 +29,27 @@ import (
 
 type StripeHandler struct {
 	Store         *store.Store
-	WebhookSecret string
+	WebhookSecret string // initial value from config (backward compat)
 	BaseURL       string
 	Email         *service.EmailService
 	WebhookSvc    *service.WebhookService
+
+	mu            sync.RWMutex
+	webhookSecret string // runtime-updatable, guarded by mu
+}
+
+// GetWebhookSecret returns the current webhook signing secret (thread-safe).
+func (h *StripeHandler) GetWebhookSecret() string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.webhookSecret
+}
+
+// SetWebhookSecret updates the webhook signing secret (thread-safe).
+func (h *StripeHandler) SetWebhookSecret(secret string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.webhookSecret = secret
 }
 
 // isSameOrigin checks that a URL shares the same scheme+host as BaseURL
@@ -104,31 +123,47 @@ func (h *StripeHandler) CreateCheckoutSession(c *gin.Context) {
 	response.OK(c, gin.H{"url": s.URL, "session_id": s.ID})
 }
 
-// CheckoutRedirect handles GET /checkout/stripe/:price_id — creates a Stripe
-// Checkout Session and redirects the user's browser directly to it.
-// No custom URLs accepted to prevent open redirect attacks.
-func (h *StripeHandler) CheckoutRedirect(c *gin.Context) {
-	priceID := c.Param("price_id")
-	if priceID == "" {
-		c.String(http.StatusBadRequest, "missing price_id")
+// CheckoutByPlan handles GET /pay/:checkout_id — looks up plan by checkout_id,
+// creates a Stripe Checkout Session, and redirects to Stripe.
+func (h *StripeHandler) CheckoutByPlan(c *gin.Context) {
+	checkoutID := c.Param("checkout_id")
+	if len(checkoutID) != 8 {
+		c.String(http.StatusBadRequest, "invalid checkout id")
 		return
 	}
 
-	plan, err := h.Store.FindPlanByStripePrice(c, priceID)
+	plan, err := h.Store.FindPlanByCheckoutID(c, checkoutID)
 	if err != nil || plan == nil {
-		c.String(http.StatusNotFound, "invalid price")
+		c.String(http.StatusNotFound, "plan not found")
 		return
 	}
 
+	if !plan.Active {
+		c.String(http.StatusGone, "this plan is no longer available")
+		return
+	}
+
+	if plan.StripePriceID == "" {
+		c.String(http.StatusServiceUnavailable, "payment not configured for this plan")
+		return
+	}
+
+	// Determine checkout mode from Stripe Price (source of truth, not local config)
+	sp, err := stripeprice.Get(plan.StripePriceID, nil)
+	if err != nil {
+		slog.Error("stripe: failed to fetch price", "price_id", plan.StripePriceID, "error", err)
+		c.String(http.StatusServiceUnavailable, "payment configuration error")
+		return
+	}
 	mode := string(stripe.CheckoutSessionModeSubscription)
-	if plan.LicenseType == "perpetual" {
+	if sp.Type == "one_time" {
 		mode = string(stripe.CheckoutSessionModePayment)
 	}
 
 	params := &stripe.CheckoutSessionParams{
 		Mode: stripe.String(mode),
 		LineItems: []*stripe.CheckoutSessionLineItemParams{
-			{Price: stripe.String(priceID), Quantity: stripe.Int64(1)},
+			{Price: stripe.String(plan.StripePriceID), Quantity: stripe.Int64(1)},
 		},
 		SuccessURL:          stripe.String(h.BaseURL + "/checkout/success?session_id={CHECKOUT_SESSION_ID}"),
 		CancelURL:           stripe.String(h.BaseURL + "/pricing"),
@@ -155,8 +190,15 @@ func (h *StripeHandler) Webhook(c *gin.Context) {
 		return
 	}
 
-	event, err := webhook.ConstructEvent(body, c.GetHeader("Stripe-Signature"), h.WebhookSecret)
+	secret := h.GetWebhookSecret()
+	if secret == "" {
+		slog.Error("stripe webhook received but no signing secret configured")
+		response.BadRequest(c, "webhook not configured")
+		return
+	}
+	event, err := webhook.ConstructEvent(body, c.GetHeader("Stripe-Signature"), secret)
 	if err != nil {
+		slog.Error("stripe webhook verification failed", "error", err.Error())
 		response.BadRequest(c, "invalid signature")
 		return
 	}
@@ -208,6 +250,7 @@ func (h *StripeHandler) Webhook(c *gin.Context) {
 
 func (h *StripeHandler) onCheckoutCompleted(ctx context.Context, raw json.RawMessage) {
 	var data struct {
+		ID            string            `json:"id"`
 		CustomerEmail string            `json:"customer_email"`
 		Customer      string            `json:"customer"`
 		Subscription  string            `json:"subscription"`
@@ -218,17 +261,43 @@ func (h *StripeHandler) onCheckoutCompleted(ctx context.Context, raw json.RawMes
 	if json.Unmarshal(raw, &data) != nil {
 		return
 	}
+	if data.Metadata == nil {
+		data.Metadata = map[string]string{}
+	}
+	data.Metadata["session_id"] = data.ID
+	h.fulfillCheckout(ctx, data.CustomerEmail, data.Customer, data.Subscription, data.Metadata, "webhook")
+}
 
+// fulfillCheckout creates a license for a completed checkout session.
+// Idempotent: skips if an active license already exists for this email+product.
+// Called by webhook, success page verification, and periodic sync.
+func (h *StripeHandler) fulfillCheckout(ctx context.Context, email, customerID, subscriptionID string, metadata map[string]string, source string) {
+	// Idempotency: use Stripe session ID if available to prevent duplicate processing
+	if metadata != nil && metadata["session_id"] != "" {
+		if !h.Store.TryRecordProcessedEvent(ctx, "stripe_fulfill", metadata["session_id"]) {
+			return
+		}
+	}
 	var plan *model.Plan
 
-	if data.Subscription != "" {
-		plan = h.resolvePlan(ctx, data.Subscription)
-	} else if data.Metadata != nil && data.Metadata["plan_id"] != "" {
-		plan, _ = h.Store.FindPlanByID(ctx, data.Metadata["plan_id"])
+	if subscriptionID != "" {
+		plan = h.resolvePlan(ctx, subscriptionID)
+	}
+	if plan == nil && metadata != nil && metadata["plan_id"] != "" {
+		plan, _ = h.Store.FindPlanByID(ctx, metadata["plan_id"])
+	}
+	if plan == nil {
+		slog.Warn("stripe checkout: could not resolve plan", "subscription_id", subscriptionID, "metadata", metadata, "source", source)
+		return
 	}
 
-	if plan == nil {
-		return
+	// Prevent duplicate
+	if email != "" {
+		if existing := h.Store.FindActiveLicenseByEmailAndProduct(ctx, email, plan.ProductID); existing != nil {
+			slog.Info("stripe checkout: license already exists",
+				"email", email, "product_id", plan.ProductID, "existing_license", existing.ID, "source", source)
+			return
+		}
 	}
 
 	status := model.StatusActive
@@ -239,10 +308,10 @@ func (h *StripeHandler) onCheckoutCompleted(ctx context.Context, raw json.RawMes
 	lic := &model.License{
 		ProductID:        plan.ProductID,
 		PlanID:           plan.ID,
-		Email:            data.CustomerEmail,
+		Email:            email,
 		LicenseKey:       license.GenerateKey(""),
 		PaymentProvider:  "stripe",
-		StripeCustomerID: data.Customer,
+		StripeCustomerID: customerID,
 		Status:           status,
 	}
 
@@ -251,14 +320,17 @@ func (h *StripeHandler) onCheckoutCompleted(ctx context.Context, raw json.RawMes
 		lic.ValidUntil = &until
 	}
 
-	if data.Subscription != "" {
-		lic.StripeSubscriptionID = data.Subscription
+	if subscriptionID != "" {
+		lic.StripeSubscriptionID = subscriptionID
 	}
 
-	_ = h.Store.CreateLicenseWithSubscription(ctx, lic, plan)
+	if err := h.Store.CreateLicenseWithSubscription(ctx, lic, plan); err != nil {
+		slog.Error("stripe checkout: failed to create license", "email", email, "error", err)
+		return
+	}
 
 	productName := h.productName(ctx, plan.ProductID)
-	if data.CustomerEmail != "" {
+	if email != "" {
 		body := fmt.Sprintf(`<!DOCTYPE html>
 <html><body style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
 <h2 style="color: #111;">Your %s License</h2>
@@ -266,19 +338,107 @@ func (h *StripeHandler) onCheckoutCompleted(ctx context.Context, raw json.RawMes
 <div style="background: #f4f4f5; border-radius: 8px; padding: 16px; margin: 16px 0; font-family: monospace; font-size: 18px; text-align: center; letter-spacing: 2px;">%s</div>
 <p style="color: #666; font-size: 14px;">Keep this key safe. You'll need it to activate your software.</p>
 </body></html>`, productName, plan.Name, lic.LicenseKey)
-		_ = h.Store.EnqueueEmail(ctx, data.CustomerEmail, "Your license for "+productName, body)
+		_ = h.Store.EnqueueEmail(ctx, email, "Your license for "+productName, body)
 	}
 
 	h.Store.Audit(ctx, &model.AuditLog{
 		Entity: "license", EntityID: lic.ID, Action: "created",
-		ActorType: "webhook",
-		Changes:   map[string]any{"provider": "stripe", "email": data.CustomerEmail, "plan": plan.Name, "mode": data.Mode},
+		ActorType: source,
+		Changes:   map[string]any{"provider": "stripe", "email": email, "plan": plan.Name},
 	})
 
 	if h.WebhookSvc != nil {
 		h.WebhookSvc.Dispatch(ctx, lic.ProductID, "license.created", map[string]any{
 			"license_id": lic.ID, "email": lic.Email, "plan_id": lic.PlanID,
 		})
+	}
+
+	slog.Info("license created", "email", email, "plan", plan.Name, "source", source)
+}
+
+// VerifyCheckoutSession handles GET /api/v1/checkout/verify?session_id=xxx
+// Called by the success page to verify payment and create license (webhook fallback).
+func (h *StripeHandler) VerifyCheckoutSession(c *gin.Context) {
+	sessionID := c.Query("session_id")
+	if sessionID == "" {
+		response.BadRequest(c, "session_id is required")
+		return
+	}
+
+	sess, err := session.Get(sessionID, &stripe.CheckoutSessionParams{})
+	if err != nil {
+		response.BadRequest(c, "invalid session")
+		return
+	}
+
+	if sess.PaymentStatus != "paid" && sess.PaymentStatus != "no_payment_required" {
+		response.OK(c, gin.H{"status": "pending"})
+		return
+	}
+
+	custID := ""
+	if sess.Customer != nil {
+		custID = sess.Customer.ID
+	}
+	subID := ""
+	if sess.Subscription != nil {
+		subID = sess.Subscription.ID
+	}
+
+	meta := sess.Metadata
+	if meta == nil {
+		meta = map[string]string{}
+	}
+	meta["session_id"] = sess.ID
+
+	h.fulfillCheckout(
+		c.Request.Context(),
+		sess.CustomerEmail,
+		custID,
+		subID,
+		meta,
+		"verify",
+	)
+
+	response.OK(c, gin.H{"status": "ok", "email": sess.CustomerEmail})
+}
+
+// SyncRecentCheckouts scans Stripe for completed checkout sessions in the last
+// interval and creates licenses for any that were missed by webhooks.
+func (h *StripeHandler) SyncRecentCheckouts(ctx context.Context) {
+	// List checkout sessions completed in the last 10 minutes
+	cutoff := time.Now().Add(-10 * time.Minute).Unix()
+	params := &stripe.CheckoutSessionListParams{
+		Status: stripe.String("complete"),
+	}
+	params.Filters.AddFilter("created", "gte", fmt.Sprintf("%d", cutoff))
+	params.Filters.AddFilter("limit", "", "50")
+
+	iter := session.List(params)
+	for iter.Next() {
+		sess := iter.CheckoutSession()
+		if sess.PaymentStatus != "paid" && sess.PaymentStatus != "no_payment_required" {
+			continue
+		}
+
+		subID := ""
+		if sess.Subscription != nil {
+			subID = sess.Subscription.ID
+		}
+		custID := ""
+		if sess.Customer != nil {
+			custID = sess.Customer.ID
+		}
+
+		meta := sess.Metadata
+		if meta == nil {
+			meta = map[string]string{}
+		}
+		meta["session_id"] = sess.ID
+		h.fulfillCheckout(ctx, sess.CustomerEmail, custID, subID, meta, "sync")
+	}
+	if err := iter.Err(); err != nil {
+		slog.Error("stripe sync: failed to list sessions", "error", err)
 	}
 }
 
@@ -876,10 +1036,11 @@ func (h *StripeHandler) onCustomerUpdated(ctx context.Context, raw json.RawMessa
 }
 
 func (h *StripeHandler) productName(ctx context.Context, productID string) string {
-	if p, err := h.Store.FindProductByID(ctx, productID); err == nil {
+	if p, err := h.Store.FindProductByID(ctx, productID); err == nil && p.Name != "" {
 		return p.Name
 	}
-	return ""
+	slog.Warn("product name not found, using fallback", "product_id", productID)
+	return "Your Software"
 }
 
 func (h *StripeHandler) resolvePlan(ctx context.Context, subID string) *model.Plan {

@@ -46,9 +46,20 @@ export const site = {
 export const auth = {
   me: () =>
     get<{ id: string; email: string; name: string; avatar_url: string; is_admin: boolean; role: string }>("/portal/me"),
-  providers: () => get<{ providers: string[]; dev_login: boolean }>("/auth/providers"),
+  providers: () => get<{ dev_login: boolean; otp: boolean }>("/auth/providers"),
   logout: () => post<void>("/auth/logout"),
   devLogin: (email: string, name: string) => post<{ status: string }>("/auth/dev-login", { email, name }),
+  otpSend: (email: string) => post<{ status: string }>("/auth/otp/send", { email }),
+  otpVerify: (email: string, code: string) =>
+    post<{ status: string; email: string; name: string; is_admin: boolean; role: string }>("/auth/otp/verify", {
+      email,
+      code,
+    }),
+}
+
+// ─── Checkout ───
+export const checkout = {
+  verify: (sessionId: string) => get<{ status: string; email?: string }>(`/checkout/verify?session_id=${sessionId}`),
 }
 
 // ─── Portal ───
@@ -71,10 +82,6 @@ export const portal = {
     post<{ status: string; immediate: boolean }>("/subscription/cancel", data),
   getBillingPortal: (data: { license_id: string }) => post<{ url: string }>("/subscription/billing-portal", data),
   getInvoices: (licenseId: string) => get<{ invoices: Invoice[] }>(`/subscription/invoices?license_id=${licenseId}`),
-  createPayPalSubscription: (data: { plan_id: string; email?: string }) =>
-    post<{ subscription_id: string; approve_url: string; status: string }>("/checkout/paypal", data),
-  cancelPayPalSubscription: (data: { license_id: string; reason?: string }) =>
-    post<{ status: string }>("/subscription/cancel-paypal", data),
 }
 
 // ─── Admin ───
@@ -335,6 +342,7 @@ export interface Plan {
   product_id: string
   name: string
   slug: string
+  checkout_id: string
   license_type: string
   billing_interval?: string
   max_activations: number
@@ -344,7 +352,6 @@ export interface Plan {
   trial_days: number
   grace_days: number
   stripe_price_id?: string
-  paypal_plan_id?: string
   active: boolean
   sort_order: number
   created_at: string

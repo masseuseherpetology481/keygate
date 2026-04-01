@@ -13,6 +13,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': 'http://localhost:9000',
+      '/pay': 'http://localhost:9000',
       '/health': 'http://localhost:9000',
     },
   },

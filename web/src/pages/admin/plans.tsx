@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Package, Pencil, Plus, Trash2 } from "lucide-react"
+import { Copy, Package, Pencil, Plus, Trash2 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { showToast } from "@/components/toast"
@@ -174,6 +174,20 @@ export default function PlansPage() {
                       </DataTableCell>
                       <DataTableCell>
                         <div className="flex gap-1">
+                          {p.checkout_id && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title={t("plans.copyCheckoutLink")}
+                              onClick={() => {
+                                const url = `${window.location.origin}/pay/${p.checkout_id}`
+                                navigator.clipboard.writeText(url)
+                                showToast(t("plans.linkCopied"))
+                              }}
+                            >
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Button variant="ghost" size="icon" onClick={() => setEditing(p)}>
                             <Pencil className="h-4 w-4" />
                           </Button>
@@ -278,7 +292,6 @@ function PlanDialog({
     grace_days: plan?.grace_days ?? 7,
     active: plan?.active ?? true,
     stripe_price_id: plan?.stripe_price_id || "",
-    paypal_plan_id: plan?.paypal_plan_id || "",
   })
 
   const set = (key: string, val: string | number | boolean) => setForm((f) => ({ ...f, [key]: val }))
@@ -410,14 +423,6 @@ function PlanDialog({
                 value={form.stripe_price_id}
                 onChange={(e) => set("stripe_price_id", e.target.value)}
                 placeholder="price_..."
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>{t("plans.paypalPlanId")}</Label>
-              <Input
-                value={form.paypal_plan_id}
-                onChange={(e) => set("paypal_plan_id", e.target.value)}
-                placeholder="P-..."
               />
             </div>
           </div>

@@ -64,8 +64,18 @@ func (s *Store) CreatePlan(ctx context.Context, p *model.Plan) error {
 	if p.ID == "" {
 		p.ID = newID()
 	}
+	if p.CheckoutID == "" {
+		p.CheckoutID = shortID()
+	}
 	_, err := s.DB.NewInsert().Model(p).Exec(ctx)
 	return err
+}
+
+// shortID generates a URL-safe 8-character unique ID for checkout links.
+func shortID() string {
+	b := make([]byte, 6)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)[:8]
 }
 
 func (s *Store) UpdatePlan(ctx context.Context, p *model.Plan) error {

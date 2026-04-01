@@ -31,7 +31,7 @@ You've built great software. Now you need to decide who can use it, how they pay
 
 Commercial license platforms charge per-seat, per-month, and your customer data lives on someone else's servers. Building your own takes months of engineering on activation logic, payment webhooks, quota tracking, and all the edge cases that come at 2 AM.
 
-**Keygate is the middle ground.** A production-ready license server you deploy on your own infrastructure, connect to your own Stripe or PayPal, and manage through a clean dashboard. It handles everything from activation to dunning — so you can focus on building your product.
+**Keygate is the middle ground.** A production-ready license server you deploy on your own infrastructure, connect to your own Stripe, and manage through a clean dashboard. It handles everything from activation to dunning — so you can focus on building your product.
 
 One binary. One database. Full control. Free, forever.
 
@@ -58,7 +58,7 @@ Track API calls, storage, bandwidth, or any custom metric. Quotas enforced **ato
 
 ### 💳 Payments
 
-Stripe and PayPal integrated end-to-end. Customer pays → license created automatically. Payment fails → dunning emails on schedule. Supports checkout, plan upgrades/downgrades with proration, cancellations, refunds, and billing portal.
+Stripe integrated end-to-end with **three-layer reliability** — webhook, success-page verification, and periodic sync ensure no payment is ever missed. Customer pays → license created automatically. Payment fails → dunning emails on schedule. Supports checkout, plan upgrades/downgrades with proration, cancellations, refunds, and billing portal. Stripe webhook is auto-configured — just set your API key.
 
 ### 👥 Team Seats & Entitlements
 
@@ -70,7 +70,7 @@ Products, plans, licenses, customers, API keys, webhooks, analytics, audit logs,
 
 ### 🛡️ Security
 
-OAuth2 login (GitHub/Google), role-based access checked per-request from database, brute-force protection, rate limiting, HMAC-signed webhooks, SameSite cookies, HSTS, and startup validation that rejects weak secrets.
+Email OTP login with constant-time hash verification, role-based access checked per-request from database, brute-force protection, rate limiting, HMAC-signed webhooks, SameSite cookies, HSTS, and startup validation that rejects weak secrets.
 
 ### 🌍 Self-Hosted
 

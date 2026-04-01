@@ -134,7 +134,7 @@ function LicenseCard({ license: lic }: { license: License }) {
         </div>
 
         {/* Subscription Actions */}
-        {(lic.payment_provider === "stripe" || lic.payment_provider === "paypal") && (
+        {lic.payment_provider === "stripe" && (
           <div className="flex gap-2 flex-wrap">
             {lic.payment_provider === "stripe" && (
               <>
@@ -493,9 +493,6 @@ function CancelDialog({
 
   const cancelMut = useMutation({
     mutationFn: () => {
-      if (provider === "paypal") {
-        return portal.cancelPayPalSubscription({ license_id: licenseId })
-      }
       return portal.cancelSubscription({ license_id: licenseId, immediate })
     },
     onSuccess: () => {
@@ -603,7 +600,7 @@ function ChangePlanDialog({ license, onClose }: { license: License; onClose: () 
     queryKey: ["portal", "plans", license.product_id],
     queryFn: () => portal.listPlans(license.product_id),
   })
-  // Filter: only plans with Stripe price, exclude current (PayPal plan changes not supported via self-service)
+  // Filter: only plans with Stripe price, exclude current
   const isStripe = license.payment_provider === "stripe"
   const plans = (plansData?.plans || []).filter((p: any) => p.id !== license.plan_id && isStripe && p.stripe_price_id)
 
@@ -636,7 +633,7 @@ function ChangePlanDialog({ license, onClose }: { license: License; onClose: () 
                 </div>
                 <Button
                   size="sm"
-                  onClick={() => changeMut.mutate(plan.stripe_price_id || plan.paypal_plan_id)}
+                  onClick={() => changeMut.mutate(plan.stripe_price_id || "")}
                   disabled={changeMut.isPending}
                 >
                   {changeMut.isPending ? t("common.loading") : t("portal.switchTo")}

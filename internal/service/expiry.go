@@ -275,7 +275,7 @@ func (c *ExpiryChecker) SendRenewalReminders(ctx context.Context) {
 }
 
 // SyncSubscriptionStates is a fallback that syncs subscription table with license status.
-// This catches cases where Stripe/PayPal webhooks were missed.
+// This catches cases where Stripe webhooks were missed.
 func (c *ExpiryChecker) SyncSubscriptionStates(ctx context.Context) {
 	if err := c.store.SyncSubscriptionStatuses(ctx); err != nil {
 		c.logger.Error("subscription sync failed", "error", err)

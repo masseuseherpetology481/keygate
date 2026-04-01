@@ -28,6 +28,8 @@ type EmailService struct {
 	store    *store.Store
 }
 
+func (s *EmailService) IsConfigured() bool { return s.enabled }
+
 func NewEmailService(host, port, username, password, from string, logger *slog.Logger, s *store.Store) *EmailService {
 	enabled := host != "" && from != ""
 	if !enabled {
@@ -270,6 +272,21 @@ func (s *EmailService) SendWelcome(to, name string) {
 	go func() {
 		if err := s.Send(to, "Welcome to Keygate", body); err != nil {
 			s.logger.Error("email delivery failed", "to", to, "error", err)
+		}
+	}()
+}
+
+func (s *EmailService) SendOTPCode(to, code string) {
+	body := `<!DOCTYPE html>
+<html><body style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+<h2>Your login code</h2>
+<p>Enter this code to sign in:</p>
+<div style="background: #f4f4f5; border-radius: 8px; padding: 16px; margin: 16px 0; font-family: monospace; font-size: 32px; text-align: center; letter-spacing: 8px; font-weight: bold;">` + code + `</div>
+<p style="color: #666; font-size: 14px;">This code expires in 10 minutes. If you didn't request this, ignore this email.</p>
+</body></html>`
+	go func() {
+		if err := s.Send(to, "Your login code", body); err != nil {
+			s.logger.Error("OTP email delivery failed", "to", to, "error", err)
 		}
 	}()
 }

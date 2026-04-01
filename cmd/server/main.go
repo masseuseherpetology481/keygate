@@ -23,7 +23,6 @@ import (
 	"github.com/tabloy/keygate/internal/config"
 	"github.com/tabloy/keygate/internal/handler"
 	"github.com/tabloy/keygate/internal/middleware"
-	"github.com/tabloy/keygate/internal/oauth"
 	"github.com/tabloy/keygate/internal/payment"
 	"github.com/tabloy/keygate/internal/service"
 	"github.com/tabloy/keygate/internal/store"
@@ -72,14 +71,6 @@ func main() {
 		stripe.Key = cfg.StripeSecretKey
 	}
 
-	oauthReg := oauth.NewRegistry()
-	if cfg.GitHubClientID != "" {
-		oauthReg.Register(&oauth.GitHub{ClientID: cfg.GitHubClientID, ClientSecret: cfg.GitHubClientSecret})
-	}
-	if cfg.GoogleClientID != "" {
-		oauthReg.Register(&oauth.Google{ClientID: cfg.GoogleClientID, ClientSecret: cfg.GoogleClientSecret})
-	}
-
 	webhookHTTPTimeout, err := time.ParseDuration(cfg.WebhookHTTPTimeout)
 	if err != nil {
 		webhookHTTPTimeout = 10 * time.Second
@@ -99,16 +90,11 @@ func main() {
 	emailSvc := service.NewEmailService(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPFrom, logger, db)
 
 	licenseH := handler.NewLicenseHandler(licenseSvc)
-	oauthH := &handler.OAuthHandler{Store: db, Config: cfg, Registry: oauthReg, Email: emailSvc}
+	authH := &handler.AuthHandler{Store: db, Config: cfg, Email: emailSvc}
 	stripeH := &payment.StripeHandler{Store: db, WebhookSecret: cfg.StripeWebhookSecret, BaseURL: cfg.BaseURL, Email: emailSvc, WebhookSvc: webhookSvc}
-	paypalH := &payment.PayPalHandler{
-		Store: db, ClientID: cfg.PayPalClientID, ClientSecret: cfg.PayPalClientSecret,
-		WebhookID: cfg.PayPalWebhookID, Sandbox: cfg.PayPalSandbox, BaseURL: cfg.BaseURL, Email: emailSvc, WebhookSvc: webhookSvc,
-	}
+	// Initialize thread-safe webhook secret with config value
+	stripeH.SetWebhookSecret(cfg.StripeWebhookSecret)
 	adminH := handler.NewAdminHandler(db, webhookSvc)
-	if cfg.PayPalClientID != "" {
-		adminH.PayPalCancel = paypalH
-	}
 	usageH := handler.NewUsageHandler(usageSvc)
 	seatH := handler.NewSeatHandler(seatSvc)
 	entitlementH := handler.NewEntitlementHandler(entitlementSvc)
@@ -124,6 +110,15 @@ func main() {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+
+	// Auto-setup Stripe webhook endpoint if:
+	// - Stripe secret key is configured
+	// - No manual webhook secret override via env var
+	// - BASE_URL is not localhost (Stripe can't deliver to localhost)
+	if cfg.StripeSecretKey != "" && cfg.StripeWebhookSecret == "" && !payment.IsLocalhostURL(cfg.BaseURL) {
+		stripeH.SetupWebhookEndpoint(ctx)
+	}
+
 	go webhookSvc.StartRetryLoop(ctx, webhookRetryInterval)
 
 	go floatingSvc.StartCleanupLoop(ctx, time.Minute)
@@ -134,6 +129,36 @@ func main() {
 	go emailSvc.StartEmailQueueProcessor(ctx, db)
 
 	go systemH.StartAutoCheck(ctx.Done())
+
+	// Cleanup expired OTP codes every hour
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				db.CleanExpiredOTPs(context.Background())
+			}
+		}
+	}()
+
+	// Periodic Stripe checkout sync — catches missed webhooks
+	if cfg.StripeSecretKey != "" {
+		go func() {
+			ticker := time.NewTicker(5 * time.Minute)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					stripeH.SyncRecentCheckouts(ctx)
+				}
+			}
+		}()
+	}
 
 	go func() {
 		ticker := time.NewTicker(24 * time.Hour)
@@ -271,30 +296,27 @@ func main() {
 
 	auth := v1.Group("/auth", middleware.RateLimitByIP(20, time.Minute))
 	{
-		auth.GET("/providers", oauthH.Providers)
-		auth.POST("/dev-login", oauthH.DevLogin)
-		auth.GET("/:provider", oauthH.Redirect)
-		auth.GET("/:provider/callback", oauthH.Callback)
-		auth.POST("/logout", middleware.SessionAuth(cfg.JWTSecret, db.FindUserIsAdmin), oauthH.Logout)
-		auth.POST("/refresh", oauthH.Refresh)
+		auth.GET("/providers", authH.Providers)
+		auth.POST("/otp/send", authH.OTPSend)
+		auth.POST("/otp/verify", authH.OTPVerify)
+		auth.POST("/dev-login", authH.DevLogin)
+		auth.POST("/logout", middleware.SessionAuth(cfg.JWTSecret, db.FindUserIsAdmin), authH.Logout)
+		auth.POST("/refresh", authH.Refresh)
 	}
 
 	v1.POST("/webhook/stripe", middleware.RateLimitByIP(60, time.Minute), stripeH.Webhook)
-	v1.POST("/webhook/paypal", middleware.RateLimitByIP(60, time.Minute), paypalH.Webhook)
-	v1.POST("/checkout/stripe", middleware.RateLimitByIP(10, time.Minute), stripeH.CreateCheckoutSession)
+	v1.GET("/checkout/verify", middleware.RateLimitByIP(10, time.Minute), stripeH.VerifyCheckoutSession)
 
-	// GET checkout — direct link redirect: /api/v1/checkout/stripe/:price_id
-	r.GET("/checkout/stripe/:price_id", middleware.RateLimitByIP(10, time.Minute), stripeH.CheckoutRedirect)
+	// Unified checkout: GET /pay/:checkout_id → Stripe
+	r.GET("/pay/:checkout_id", middleware.RateLimitByIP(10, time.Minute), stripeH.CheckoutByPlan)
 	v1.POST("/subscription/change-plan", middleware.SessionAuth(cfg.JWTSecret, db.FindUserIsAdmin), stripeH.ChangePlan)
 	v1.POST("/subscription/cancel", middleware.SessionAuth(cfg.JWTSecret, db.FindUserIsAdmin), stripeH.CancelSubscription)
 	v1.POST("/subscription/billing-portal", middleware.SessionAuth(cfg.JWTSecret, db.FindUserIsAdmin), stripeH.CreatePortalSession)
 	v1.GET("/subscription/invoices", middleware.SessionAuth(cfg.JWTSecret, db.FindUserIsAdmin), stripeH.ListInvoices)
-	v1.POST("/checkout/paypal", middleware.RateLimitByIP(10, time.Minute), paypalH.CreateSubscription)
-	v1.POST("/subscription/cancel-paypal", middleware.SessionAuth(cfg.JWTSecret, db.FindUserIsAdmin), paypalH.CancelSubscription)
 
 	portal := v1.Group("/portal", middleware.SessionAuth(cfg.JWTSecret, db.FindUserIsAdmin))
 	{
-		portal.GET("/me", oauthH.Me)
+		portal.GET("/me", authH.Me)
 		portal.GET("/licenses", func(c *gin.Context) {
 			emailVal, _ := c.Get("email")
 			emailStr, ok := emailVal.(string)
@@ -368,7 +390,7 @@ func main() {
 					active = append(active, gin.H{
 						"id": p.ID, "name": p.Name, "slug": p.Slug,
 						"license_type": p.LicenseType, "billing_interval": p.BillingInterval,
-						"stripe_price_id": p.StripePriceID, "paypal_plan_id": p.PayPalPlanID,
+						"stripe_price_id": p.StripePriceID, "checkout_id": p.CheckoutID,
 					})
 				}
 			}
@@ -594,7 +616,7 @@ func serveFrontend(r *gin.Engine) {
 		path := c.Request.URL.Path
 
 		// Let backend routes pass through.
-		if strings.HasPrefix(path, "/api/") || strings.HasPrefix(path, "/checkout/stripe/") || path == "/health" || path == "/metrics" || path == "/docs" || strings.HasPrefix(path, "/docs/") {
+		if strings.HasPrefix(path, "/api/") || strings.HasPrefix(path, "/pay/") || path == "/health" || path == "/metrics" || path == "/docs" || strings.HasPrefix(path, "/docs/") {
 			c.Next()
 			return
 		}
