@@ -169,8 +169,6 @@ func (h *StripeHandler) CheckoutByPlan(c *gin.Context) {
 		SuccessURL:          stripe.String(h.BaseURL + "/checkout/success?session_id={CHECKOUT_SESSION_ID}"),
 		CancelURL:           stripe.String(h.BaseURL + "/pricing"),
 		AllowPromotionCodes: stripe.Bool(true),
-		CustomerEmail:       nil, // let Stripe collect it
-		CustomerCreation:    stripe.String("always"),
 	}
 	params.Metadata = map[string]string{
 		"plan_id":    plan.ID,
